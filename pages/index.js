@@ -2,7 +2,20 @@ import { useState, useRef, useEffect } from "react";
 
 const SYSTEM_PROMPT = `You are a sponsorship intelligence analyst for Suite Seventy-Five — an invite-only cultural lounge experience hosted during BET Awards Weekend in Los Angeles (June 26, 2026) by The Suite Spot, produced by The Elle Collective. The event gathers 75 curated guests across entertainment, media, business, and culture. It honors Black Music Month and Juneteenth, rooted in amplifying underrepresented creatives. Confirmed partner: Crown Royal. Tiers: Cultural Curator ($12K, 1 slot), Experience Architect ($5,500, 4 slots), Creative Ally (in-kind).
 
-Given a brand name, use your training knowledge to identify the best 1-3 people to contact for a cultural event sponsorship pitch. Focus on: Head of Partnerships, Brand Partnerships Manager, Experiential Marketing Director, VP of Marketing, Director of Multicultural Marketing, Cultural Marketing Lead, Sponsorships Lead.
+Given a brand name, identify the best 1-3 REAL, SPECIFIC people to contact for a cultural event sponsorship pitch.
+
+CRITICAL RULES — follow every one:
+1. Every contact MUST have a real full name for any well-known brand. Never return a title without a name for major brands.
+2. Every contact MUST have a specific title. "Director of Brand Partnerships" not "Partnerships Team."
+3. Every contact MUST have a LinkedIn URL — construct it as linkedin.com/in/firstname-lastname if you know who they are, or provide a LinkedIn search URL like linkedin.com/search/results/people/?keywords=brand+partnerships+brandname as a fallback.
+4. Every contact MUST have a specific whyTheyreTheOne that references something real about this person's role, background, or the brand's cultural work. No generic filler.
+5. Every contact MUST have a pitchAngle that specifically mentions Suite Seventy-Five AND at least one of: BET Awards Weekend, Black Music Month, Juneteenth. Not a generic opener.
+6. emailPattern must follow the brand's known email convention e.g. firstname@brand.com or firstname.lastname@brand.com.
+7. Contacts ranked: #1 = highest confidence named decision-maker, #2 = second best option or alternate, #3 = backup department or escalation contact.
+8. For smaller/lesser-known brands where you cannot find a name: describe the exact role to target, mark confidence Low, and provide a LinkedIn search URL.
+9. Never return vague placeholder contacts. Every single field should be actionable.
+10. sponsorshipHistory must name real events, campaigns, or cultural moments — not just "they sponsor music events."
+11. approachTip must give a real strategic angle — warm intro path, timing, framing tied to their brand values, or a specific cultural connection point.
 
 Return ONLY raw JSON — no markdown, no backticks, no text before or after:
 {
@@ -10,27 +23,27 @@ Return ONLY raw JSON — no markdown, no backticks, no text before or after:
   "website": "string or null",
   "brandSummary": "string",
   "fitScore": 80,
-  "fitReason": "string",
-  "recommendedTier": "string",
+  "fitReason": "string — specific to Suite Seventy-Five's audience and mission",
+  "recommendedTier": "Cultural Curator ($12K) or Experience Architect ($5,500) or Creative Ally (In-Kind)",
   "contacts": [
     {
-      "name": "string or null",
-      "title": "string",
+      "name": "string — real full name, required for well-known brands",
+      "title": "string — specific title",
       "department": "string",
-      "linkedin": "string or null",
+      "linkedin": "string — real or constructed URL, always required",
       "instagram": "string or null",
       "email": "string or null",
-      "emailPattern": "string or null",
+      "emailPattern": "string — brand email convention, always required",
       "confidence": "High or Medium or Low",
-      "whyTheyreTheOne": "string",
-      "pitchAngle": "string"
+      "whyTheyreTheOne": "string — specific to this person and this pitch",
+      "pitchAngle": "string — must mention Suite Seventy-Five and BET Weekend or Black Music Month or Juneteenth"
     }
   ],
   "generalInbox": "string or null",
-  "sponsorshipHistory": "string",
-  "approachTip": "string",
+  "sponsorshipHistory": "string — name real events or campaigns",
+  "approachTip": "string — real strategic angle",
   "redFlags": "string or null",
-  "dataNote": "string"
+  "dataNote": "string — honest confidence assessment, recommend verification steps"
 }`;
 
 const fitColor = (s) => s >= 75 ? "#2db56a" : s >= 50 ? "#e8a020" : "#d94f38";
@@ -101,7 +114,7 @@ export default function App() {
           model: "claude-sonnet-4-20250514",
           max_tokens: 2000,
           system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: `Research this brand for a sponsorship pitch: ${q}` }]
+          messages: [{ role: "user", content: `Research this brand thoroughly. Give me real named contacts with specific details — no placeholders. Brand: ${q}` }]
         })
       });
 
@@ -152,8 +165,6 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Palatino Linotype', Palatino, Georgia, serif", background: "#0d0a06", minHeight: "100vh", color: "#fdf5ec" }}>
-
-      {/* Header */}
       <div style={{ background: "linear-gradient(160deg,#1f1108,#2c1a0e 50%,#1a0d05)", borderBottom: "1px solid rgba(201,169,110,0.18)", padding: "20px 28px 16px" }}>
         <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
           <div>
@@ -169,8 +180,6 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "24px 20px" }}>
-
-        {/* Search bar */}
         <div style={{ background: "#1a1008", border: "1.5px solid rgba(201,169,110,0.3)", borderRadius: 12, display: "flex", overflow: "hidden", boxShadow: "0 6px 30px rgba(0,0,0,0.5)", marginBottom: 14 }}>
           <div style={{ padding: "13px 14px", color: "#c9a96e", fontSize: 15 }}>◎</div>
           <input ref={inputRef} value={query}
@@ -187,7 +196,6 @@ export default function App() {
           }
         </div>
 
-        {/* Chips */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 26, alignItems: "center" }}>
           {history.length > 0 && <>
             <span style={{ fontSize: 9, color: "#4a3020", letterSpacing: 2, textTransform: "uppercase" }}>Recent:</span>
@@ -200,7 +208,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Loading */}
         {loading && (
           <div style={{ textAlign: "center", padding: "52px 20px" }}>
             <div style={{ display: "inline-flex", gap: 6, marginBottom: 18 }}>
@@ -213,7 +220,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Error */}
         {error && !loading && (
           <div style={{ background: "#1a0808", border: "1px solid #5a1a1a", borderRadius: 10, padding: "14px 18px", color: "#f0a0a0", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <span style={{ lineHeight: 1.6 }}>⚠ {error}</span>
@@ -221,12 +227,10 @@ export default function App() {
           </div>
         )}
 
-        {/* Results */}
         {result && !loading && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
             <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
 
-            {/* Brand card */}
             <div style={{ background: "linear-gradient(145deg,#1c1108,#211408)", border: "1px solid rgba(201,169,110,0.22)", borderRadius: 14, padding: "22px 24px", marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                 <div style={{ flex: 1 }}>
@@ -250,7 +254,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-
               <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
                 <InfoRow color="#c9a96e" label="Why They Fit" text={result.fitReason} />
                 {result.sponsorshipHistory && <InfoRow color="#2db56a" label="Sponsorship History" text={result.sponsorshipHistory} />}
@@ -259,7 +262,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Contacts */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
               <div style={{ fontSize: 9, color: "#4a3020", letterSpacing: 3, textTransform: "uppercase" }}>
                 {result.contacts.length > 1 ? `${result.contacts.length} Contacts · Ranked by Confidence` : "Best Contact to Pitch"}
@@ -299,7 +301,7 @@ export default function App() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 8, marginBottom: 14 }}>
                     {c.email && <DetailChip icon="✉" label="Email" value={c.email} copyKey={`e${i}`} copied={copied} onCopy={() => copy(c.email, `e${i}`)} />}
                     {!c.email && c.emailPattern && <DetailChip icon="✉" label="Likely Email Format" value={c.emailPattern} dim copyKey={`ep${i}`} copied={copied} onCopy={() => copy(c.emailPattern, `ep${i}`)} />}
-                    {c.linkedin && <DetailChip icon="in" label="LinkedIn" value={c.linkedin} href={c.linkedin} copyKey={`li${i}`} copied={copied} onCopy={() => copy(c.linkedin, `li${i}`)} />}
+                    {c.linkedin && <DetailChip icon="in" label="LinkedIn" value={c.linkedin} href={c.linkedin.startsWith("http") ? c.linkedin : `https://${c.linkedin}`} copyKey={`li${i}`} copied={copied} onCopy={() => copy(c.linkedin, `li${i}`)} />}
                     {c.instagram && <DetailChip icon="◈" label="Instagram" value={`@${c.instagram.replace("@", "")}`} copyKey={`ig${i}`} copied={copied} onCopy={() => copy(`@${c.instagram.replace("@", "")}`, `ig${i}`)} />}
                   </div>
 
@@ -349,12 +351,11 @@ export default function App() {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && !result && !error && (
           <div style={{ textAlign: "center", padding: "52px 20px" }}>
             <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.2 }}>◎</div>
             <div style={{ fontSize: 13, color: "#3a2510", marginBottom: 4 }}>Type any brand name to find their sponsorship decision-maker</div>
-            <div style={{ fontSize: 11, color: "#2a1808" }}>Returns the right contact, role, pitch opener, and fit score for Suite Seventy-Five</div>
+            <div style={{ fontSize: 11, color: "#2a1808" }}>Real contacts · Specific roles · Tailored pitch openers · Suite Seventy-Five fit score</div>
           </div>
         )}
       </div>
