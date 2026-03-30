@@ -1,55 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 
-const SYSTEM_PROMPT = `You are a sponsorship intelligence analyst for Suite Seventy-Five — an invite-only cultural lounge experience hosted during BET Awards Weekend in Los Angeles (June 26, 2026) by The Suite Spot, produced by The Elle Collective. The event gathers 75 curated guests across entertainment, media, business, and culture. It honors Black Music Month and Juneteenth, rooted in amplifying underrepresented creatives. Confirmed partner: Crown Royal. Tiers: Cultural Curator ($12K, 1 slot), Experience Architect ($5,500, 4 slots), Creative Ally (in-kind).
-
-Given a brand name, identify the best 1-3 REAL, SPECIFIC people to contact for a cultural event sponsorship pitch.
-
-CRITICAL RULES — follow every one:
-1. Every contact MUST have a real full name for any well-known brand. Never return a title without a name for major brands.
-2. Every contact MUST have a specific title. "Director of Brand Partnerships" not "Partnerships Team."
-3. Every contact MUST have a LinkedIn URL — construct it as linkedin.com/in/firstname-lastname if you know who they are, or provide a LinkedIn search URL like linkedin.com/search/results/people/?keywords=brand+partnerships+brandname as a fallback.
-4. Every contact MUST have a specific whyTheyreTheOne that references something real about this person's role, background, or the brand's cultural work. No generic filler.
-5. Every contact MUST have a pitchAngle that specifically mentions Suite Seventy-Five AND at least one of: BET Awards Weekend, Black Music Month, Juneteenth. Not a generic opener.
-6. emailPattern must follow the brand's known email convention e.g. firstname@brand.com or firstname.lastname@brand.com.
-7. Contacts ranked: #1 = highest confidence named decision-maker, #2 = second best option or alternate, #3 = backup department or escalation contact.
-8. For smaller/lesser-known brands where you cannot find a name: describe the exact role to target, mark confidence Low, and provide a LinkedIn search URL.
-9. Never return vague placeholder contacts. Every single field should be actionable.
-10. sponsorshipHistory must name real events, campaigns, or cultural moments — not just "they sponsor music events."
-11. approachTip must give a real strategic angle — warm intro path, timing, framing tied to their brand values, or a specific cultural connection point.
-
-Return ONLY raw JSON — no markdown, no backticks, no text before or after:
-{
-  "brand": "string",
-  "website": "string or null",
-  "brandSummary": "string",
-  "fitScore": 80,
-  "fitReason": "string — specific to Suite Seventy-Five's audience and mission",
-  "recommendedTier": "Cultural Curator ($12K) or Experience Architect ($5,500) or Creative Ally (In-Kind)",
-  "contacts": [
-    {
-      "name": "string — real full name, required for well-known brands",
-      "title": "string — specific title",
-      "department": "string",
-      "linkedin": "string — real or constructed URL, always required",
-      "instagram": "string or null",
-      "email": "string or null",
-      "emailPattern": "string — brand email convention, always required",
-      "confidence": "High or Medium or Low",
-      "whyTheyreTheOne": "string — specific to this person and this pitch",
-      "pitchAngle": "string — must mention Suite Seventy-Five and BET Weekend or Black Music Month or Juneteenth"
-    }
-  ],
-  "generalInbox": "string or null",
-  "sponsorshipHistory": "string — name real events or campaigns",
-  "approachTip": "string — real strategic angle",
-  "redFlags": "string or null",
-  "dataNote": "string — honest confidence assessment, recommend verification steps"
-}`;
-
 const fitColor = (s) => s >= 75 ? "#2db56a" : s >= 50 ? "#e8a020" : "#d94f38";
 const confColor = { High: "#2db56a", Medium: "#e8a020", Low: "#b89d8a" };
 const SUGGESTED = ["Hennessy", "SheaMoisture", "Cash App", "Amazon Music", "Spotify", "Fenty Beauty", "Patrón", "CIROC"];
-const LOAD_MSGS = ["Analyzing brand profile…", "Mapping org structure…", "Identifying decision-makers…", "Building your pitch angle…"];
+const LOAD_MSGS = [
+  "Searching brand website…",
+  "Scanning LinkedIn profiles…",
+  "Checking trades & press…",
+  "Searching BET & cultural sponsorships…",
+  "Verifying decision-makers…",
+  "Building your pitch intel…",
+];
 
 export default function App() {
   const [query, setQuery] = useState("");
@@ -96,45 +57,30 @@ export default function App() {
     loadTimer.current = setInterval(() => {
       msgIdx = (msgIdx + 1) % LOAD_MSGS.length;
       setLoadMsg(LOAD_MSGS[msgIdx]);
-    }, 2500);
+    }, 5000);
 
     let secs = 0;
     elapsedTimer.current = setInterval(() => { secs++; setElapsed(secs); }, 1000);
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const killswitch = setTimeout(() => controller.abort(), 30000);
+    const killswitch = setTimeout(() => controller.abort(), 90000);
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: `Research this brand thoroughly. Give me real named contacts with specific details — no placeholders. Brand: ${q}` }]
-        })
+        body: JSON.stringify({ brand: q })
       });
 
       const raw = await res.json();
-      if (!res.ok) throw new Error(raw?.error?.message || `Error ${res.status}`);
+      if (!res.ok) throw new Error(raw?.error || `Error ${res.status}`);
+      if (!raw.brand || !raw.contacts?.length) throw new Error("Incomplete result. Please try again.");
 
-      const block = raw.content?.find((b) => b.type === "text");
-      if (!block?.text) throw new Error("Empty response. Please try again.");
-
-      const text = block.text.replace(/```json|```/g, "").trim();
-      const s = text.indexOf("{");
-      const e = text.lastIndexOf("}");
-      if (s === -1 || e === -1) throw new Error("Couldn't parse response. Please try again.");
-
-      const parsed = JSON.parse(text.slice(s, e + 1));
-      if (!parsed.brand || !parsed.contacts?.length) throw new Error("Incomplete result. Please try again.");
-
-      setResult(parsed);
+      setResult(raw);
       const updated = [
-        { brand: q, data: parsed },
+        { brand: q, data: raw },
         ...history.filter((h) => h.brand.toLowerCase() !== q.toLowerCase())
       ].slice(0, 8);
       setHistory(updated);
@@ -142,7 +88,7 @@ export default function App() {
 
     } catch (e) {
       if (e.name === "AbortError") {
-        setError("Timed out after 30 seconds. Please try again.");
+        setError("Timed out — web searches can take up to 60 seconds. Please try again.");
       } else {
         setError(e.message || "Something went wrong. Please try again.");
       }
@@ -165,12 +111,14 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Palatino Linotype', Palatino, Georgia, serif", background: "#0d0a06", minHeight: "100vh", color: "#fdf5ec" }}>
+
+      {/* Header */}
       <div style={{ background: "linear-gradient(160deg,#1f1108,#2c1a0e 50%,#1a0d05)", borderBottom: "1px solid rgba(201,169,110,0.18)", padding: "20px 28px 16px" }}>
         <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
           <div>
             <div style={{ fontSize: 9, letterSpacing: 5, color: "#c9a96e", textTransform: "uppercase", marginBottom: 3 }}>The Suite Spot · Suite Seventy-Five · BET Weekend 2026</div>
             <div style={{ fontSize: 22, fontWeight: "bold", color: "#fdf5ec" }}>Sponsor Contact Finder</div>
-            <div style={{ fontSize: 11, color: "#8a6b54", marginTop: 4 }}>Enter a brand — get the right person to pitch, not just the right company.</div>
+            <div style={{ fontSize: 11, color: "#8a6b54", marginTop: 4 }}>Live web research — verified contacts from LinkedIn, company sites & press.</div>
           </div>
           <div style={{ fontSize: 10, color: "#4a3020", textAlign: "right", lineHeight: 1.8 }}>
             <div style={{ color: "#c9a96e" }}>✓ Crown Royal confirmed</div>
@@ -180,6 +128,8 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "24px 20px" }}>
+
+        {/* Search bar */}
         <div style={{ background: "#1a1008", border: "1.5px solid rgba(201,169,110,0.3)", borderRadius: 12, display: "flex", overflow: "hidden", boxShadow: "0 6px 30px rgba(0,0,0,0.5)", marginBottom: 14 }}>
           <div style={{ padding: "13px 14px", color: "#c9a96e", fontSize: 15 }}>◎</div>
           <input ref={inputRef} value={query}
@@ -196,6 +146,7 @@ export default function App() {
           }
         </div>
 
+        {/* Chips */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 26, alignItems: "center" }}>
           {history.length > 0 && <>
             <span style={{ fontSize: 9, color: "#4a3020", letterSpacing: 2, textTransform: "uppercase" }}>Recent:</span>
@@ -208,18 +159,21 @@ export default function App() {
           ))}
         </div>
 
+        {/* Loading */}
         {loading && (
           <div style={{ textAlign: "center", padding: "52px 20px" }}>
             <div style={{ display: "inline-flex", gap: 6, marginBottom: 18 }}>
               {[0, 1, 2].map((i) => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#c9a96e", animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
             </div>
             <div style={{ color: "#c9a96e", fontSize: 14, marginBottom: 6 }}>{loadMsg}</div>
-            <div style={{ color: "#4a3020", fontSize: 11, marginBottom: 20 }}>{elapsed}s elapsed · usually under 15s</div>
+            <div style={{ color: "#4a3020", fontSize: 11, marginBottom: 4 }}>{elapsed}s elapsed · live web research takes 30–60 seconds</div>
+            <div style={{ color: "#3a2010", fontSize: 10, marginBottom: 20 }}>Searching LinkedIn, company sites, trades & press…</div>
             <button onClick={cancel} style={{ background: "transparent", border: "1px solid rgba(201,169,110,0.2)", borderRadius: 8, padding: "7px 18px", fontSize: 11, color: "#6b4c35", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
             <style>{`@keyframes pulse{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}`}</style>
           </div>
         )}
 
+        {/* Error */}
         {error && !loading && (
           <div style={{ background: "#1a0808", border: "1px solid #5a1a1a", borderRadius: 10, padding: "14px 18px", color: "#f0a0a0", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <span style={{ lineHeight: 1.6 }}>⚠ {error}</span>
@@ -227,10 +181,12 @@ export default function App() {
           </div>
         )}
 
+        {/* Results */}
         {result && !loading && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
             <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
 
+            {/* Brand card */}
             <div style={{ background: "linear-gradient(145deg,#1c1108,#211408)", border: "1px solid rgba(201,169,110,0.22)", borderRadius: 14, padding: "22px 24px", marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                 <div style={{ flex: 1 }}>
@@ -254,28 +210,43 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
               <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
                 <InfoRow color="#c9a96e" label="Why They Fit" text={result.fitReason} />
                 {result.sponsorshipHistory && <InfoRow color="#2db56a" label="Sponsorship History" text={result.sponsorshipHistory} />}
                 {result.approachTip && <InfoRow color="#5a8fc4" label="Approach Tip" text={result.approachTip} />}
                 {result.redFlags && <InfoRow color="#d94f38" label="Heads Up" text={result.redFlags} />}
               </div>
-            </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-              <div style={{ fontSize: 9, color: "#4a3020", letterSpacing: 3, textTransform: "uppercase" }}>
-                {result.contacts.length > 1 ? `${result.contacts.length} Contacts · Ranked by Confidence` : "Best Contact to Pitch"}
-              </div>
-              {result.contacts.length > 1 && (
-                <div style={{ display: "flex", gap: 5 }}>
-                  {result.contacts.map((c, i) => (
-                    <button key={i} onClick={() => setActiveTab(i)}
-                      style={{ background: activeTab === i ? "#c9a96e" : "#1c1108", color: activeTab === i ? "#1a0d05" : "#8a6b54", border: `1px solid ${activeTab === i ? "#c9a96e" : "rgba(201,169,110,0.15)"}`, borderRadius: 7, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: activeTab === i ? "bold" : "normal" }}>
-                      {i === 0 && "★ "}{c.name ? c.name.split(" ")[0] : `#${i + 1}`}
-                    </button>
-                  ))}
+              {/* Sources searched */}
+              {result.sourcesSearched?.length > 0 && (
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(201,169,110,0.1)" }}>
+                  <div style={{ fontSize: 9, color: "#4a3020", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Sources Searched</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {result.sourcesSearched.map((s, i) => (
+                      <a key={i} href={s} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 9, color: "#5a3520", background: "rgba(201,169,110,0.05)", border: "1px solid rgba(201,169,110,0.1)", borderRadius: 5, padding: "2px 7px", textDecoration: "none", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                        ↗ {s.replace("https://", "").replace("www.", "").slice(0, 40)}{s.length > 50 ? "…" : ""}
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
+            </div>
+
+            {/* Contacts tabs */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontSize: 9, color: "#4a3020", letterSpacing: 3, textTransform: "uppercase" }}>
+                {result.contacts.length} Contacts · Verified via Live Research
+              </div>
+              <div style={{ display: "flex", gap: 5 }}>
+                {result.contacts.map((c, i) => (
+                  <button key={i} onClick={() => setActiveTab(i)}
+                    style={{ background: activeTab === i ? "#c9a96e" : "#1c1108", color: activeTab === i ? "#1a0d05" : "#8a6b54", border: `1px solid ${activeTab === i ? "#c9a96e" : "rgba(201,169,110,0.15)"}`, borderRadius: 7, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: activeTab === i ? "bold" : "normal" }}>
+                    {i === 0 && "★ "}{c.name && !c.name.includes("Not verified") ? c.name.split(" ")[0] : `#${i + 1}`}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {result.contacts.map((c, i) => (
@@ -284,12 +255,13 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
                     <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                       <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#2c1a0e", border: "2px solid #c9a96e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, color: "#c9a96e", fontWeight: "bold", flexShrink: 0 }}>
-                        {c.name ? c.name[0].toUpperCase() : "?"}
+                        {c.name && !c.name.includes("Not verified") ? c.name[0].toUpperCase() : "?"}
                       </div>
                       <div>
-                        <div style={{ fontSize: 17, fontWeight: "bold", color: "#fdf5ec" }}>{c.name || "Role Identified (Name TBD)"}</div>
+                        <div style={{ fontSize: 17, fontWeight: "bold", color: "#fdf5ec" }}>{c.name || "Contact TBD"}</div>
                         <div style={{ fontSize: 12, color: "#c9a96e", marginTop: 1 }}>{c.title}</div>
                         <div style={{ fontSize: 11, color: "#6b4c35" }}>{c.department}</div>
+                        {c.source && <div style={{ fontSize: 10, color: "#3a2010", marginTop: 2 }}>Found via: {c.source}</div>}
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,0.2)", borderRadius: 20, padding: "4px 10px" }}>
@@ -351,11 +323,12 @@ export default function App() {
           </div>
         )}
 
+        {/* Empty state */}
         {!loading && !result && !error && (
           <div style={{ textAlign: "center", padding: "52px 20px" }}>
             <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.2 }}>◎</div>
-            <div style={{ fontSize: 13, color: "#3a2510", marginBottom: 4 }}>Type any brand name to find their sponsorship decision-maker</div>
-            <div style={{ fontSize: 11, color: "#2a1808" }}>Real contacts · Specific roles · Tailored pitch openers · Suite Seventy-Five fit score</div>
+            <div style={{ fontSize: 13, color: "#3a2510", marginBottom: 4 }}>Type any brand name to find their verified sponsorship decision-maker</div>
+            <div style={{ fontSize: 11, color: "#2a1808" }}>Live research across LinkedIn, company sites, trades & press · takes 30–60 seconds</div>
           </div>
         )}
       </div>
